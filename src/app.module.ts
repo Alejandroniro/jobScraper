@@ -7,7 +7,7 @@ import { ScrapingModule } from './scraping/scraping.module';
 
 @Module({
   imports: [
-    MongooseModule.forRoot('mongodb://localhost/jobScraper'),
+    MongooseModule.forRoot('mongodb://localhost:27017/jobScraper'),
     ScrapingModule,
   ],
   controllers: [AppController, ScrapingController],
