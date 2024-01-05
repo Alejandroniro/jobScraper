@@ -18,7 +18,7 @@ export class ScrapingService {
 
     constructor(@InjectModel('Job') private readonly jobModel: Model<Job>) { }
 
-    async jobScrape(): Promise<any> {
+    async scrapeComputrabajo(): Promise<any> {
         const browser = await chromium.launch({
             headless: false
         });
@@ -230,5 +230,95 @@ export class ScrapingService {
         });
 
         return { title, company, location, salary, keyword, requirement };
+    }
+
+    async scrapeGetManfred(): Promise<any> {
+        const browser = await chromium.launch({
+            headless: false
+        });
+
+        const context = await browser.newContext();
+        const page = await context.newPage();
+        let newJobsCounter = 0; // Inicializar el contador
+
+        try {
+            await page.goto('https://www.getmanfred.com/');
+
+            await page.type('#prof-cat-search-input[type=search]', this.SEARCH_KEYWORD);
+            await page.waitForTimeout(1000);
+            await page.click('#search-button');
+
+            // Esperar a que aparezca el pop-up
+            const popup = await page.waitForSelector('#pop-up-webpush-sub', { timeout: 5000 }).catch(() => null);
+
+            if (popup) {
+
+                // Hacer clic en el botón "Ahora no"
+                const closeButton = await page.$('#pop-up-webpush-sub button[onclick="webpush_subscribe_ko(event);"]');
+                if (closeButton) {
+                    await closeButton.click();
+                }
+            } else {
+                console.log('El pop-up no está presente, continúa con el código.');
+            }
+
+            const elements = await page.$$('div.filters div.field_select_links');
+
+            // Comprobar si hay al menos dos elementos
+            if (elements.length >= 2) {
+                // Hacer clic en el segundo elemento
+                await elements[1].click();
+            } else {
+                console.error('No hay suficientes elementos para hacer clic en el segundo elemento.');
+            }
+
+            // Obtener el valor del filtro de fecha utilizando la constante
+            const dateFilterValue = this.DATE_FILTER_ATTRIBUTES.UltimaSemana;
+
+            // Esperar a que aparezca el elemento <span>
+            await page.waitForSelector(`span.buildLink[data-path="?pubdate=${dateFilterValue}"]`);
+
+            // Hacer clic en el elemento <span>
+            const dateFilter = await page.$(`span.buildLink[data-path="?pubdate=${dateFilterValue}"]`);
+            if (dateFilter) {
+                await dateFilter.click();
+            } else {
+                console.error(`No se encontró el elemento <span> con el atributo data-path="?pubdate=${dateFilterValue}"`);
+            }
+
+            // Se inicia el proceso de recopilación y procesamiento de enlaces
+            const links = await this.collectLinks(page);
+
+            // Ahora, procesamos cada enlace para obtener los detalles del trabajo
+            const jobDetails = [];
+            for (let link of links) {
+                // Espera entre solicitudes para reducir la velocidad
+                const jobDetail = await this.processJobDetails(page, link);
+
+                // Guardar en la base de datos
+                try {
+                    const newJob = new this.jobModel(jobDetail);
+                    await newJob.save();
+                    jobDetails.push(jobDetail);
+                    newJobsCounter++;
+
+                } catch (error) {
+                    // Verifica si el error es debido a un índice único duplicado
+                    if (error.code === 11000) {
+                        console.log('El trabajo ya existe en la base de datos.');
+                    } else {
+                        // Si es un error diferente, lo relanzas para que sea manejado por el sistema
+                        throw error;
+                    }
+                }
+
+                await page.waitForTimeout(1000);
+            }
+            console.log(`Proceso completado. Se agregaron ${newJobsCounter} trabajos nuevos a la base de datos.`);
+            return jobDetails;
+        } finally {
+            await context.close();
+            await browser.close();
+        }
     }
 }
