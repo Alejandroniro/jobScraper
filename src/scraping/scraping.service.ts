@@ -59,7 +59,7 @@ export class ScrapingService {
             }
 
             // Obtener el valor del filtro de fecha utilizando la constante
-            const dateFilterValue = this.DATE_FILTER_ATTRIBUTES.UltimosTresDias;
+            const dateFilterValue = this.DATE_FILTER_ATTRIBUTES.UltimaSemana;
 
             // Esperar a que aparezca el elemento <span>
             await page.waitForSelector(`span.buildLink[data-path="?pubdate=${dateFilterValue}"]`);
