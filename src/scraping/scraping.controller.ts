@@ -5,8 +5,8 @@ import { ScrapingService } from "./scraping.service";
 export class ScrapingController {
     constructor(private readonly scrapingService: ScrapingService){}
 
-    @Get('/computrabajo')
-    scrapeComputrabajo() {
-        return this.scrapingService.scrapeComputrabajo();
+    @Get('/scraping')
+    jobScrape() {
+        return this.scrapingService.jobScrape();
     }
 }

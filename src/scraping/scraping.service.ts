@@ -18,7 +18,7 @@ export class ScrapingService {
 
     constructor(@InjectModel('Job') private readonly jobModel: Model<Job>) { }
 
-    async scrapeComputrabajo(): Promise<any> {
+    async jobScrape(): Promise<any> {
         const browser = await chromium.launch({
             headless: false
         });
