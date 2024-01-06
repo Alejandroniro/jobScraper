@@ -59,7 +59,7 @@ export class ScrapingService {
             }
 
             // Obtener el valor del filtro de fecha utilizando la constante
-            const dateFilterValue = this.DATE_FILTER_ATTRIBUTES.UltimaSemana;
+            const dateFilterValue = this.DATE_FILTER_ATTRIBUTES.Hoy;
 
             // Esperar a que aparezca el elemento <span>
             await page.waitForSelector(`span.buildLink[data-path="?pubdate=${dateFilterValue}"]`);
@@ -237,88 +237,83 @@ export class ScrapingService {
             headless: false
         });
 
+
         const context = await browser.newContext();
         const page = await context.newPage();
-        let newJobsCounter = 0; // Inicializar el contador
+
+        // Agregar el contador
+        let newJobsCounter = 0;
 
         try {
-            await page.goto('https://www.getmanfred.com/');
+            await page.goto('https://www.getmanfred.com/ofertas-empleo?onlyActive=true&currency=€');
 
-            await page.type('#prof-cat-search-input[type=search]', this.SEARCH_KEYWORD);
-            await page.waitForTimeout(1000);
-            await page.click('#search-button');
+            // Esperar a que la página cargue completamente
+            await page.waitForLoadState('load');
 
-            // Esperar a que aparezca el pop-up
-            const popup = await page.waitForSelector('#pop-up-webpush-sub', { timeout: 5000 }).catch(() => null);
+            const links = await this.collectGetManfredLinks(page);
 
-            if (popup) {
+            // Procesar cada enlace para obtener más detalles
+            const details = [];
+            for (const link of links) {
+                const detail = await this.processGetManfredDetails(page, link);
+                details.push(detail);
 
-                // Hacer clic en el botón "Ahora no"
-                const closeButton = await page.$('#pop-up-webpush-sub button[onclick="webpush_subscribe_ko(event);"]');
-                if (closeButton) {
-                    await closeButton.click();
-                }
-            } else {
-                console.log('El pop-up no está presente, continúa con el código.');
+                // Incrementar el contador
+                newJobsCounter++;
             }
 
-            const elements = await page.$$('div.filters div.field_select_links');
-
-            // Comprobar si hay al menos dos elementos
-            if (elements.length >= 2) {
-                // Hacer clic en el segundo elemento
-                await elements[1].click();
-            } else {
-                console.error('No hay suficientes elementos para hacer clic en el segundo elemento.');
-            }
-
-            // Obtener el valor del filtro de fecha utilizando la constante
-            const dateFilterValue = this.DATE_FILTER_ATTRIBUTES.UltimaSemana;
-
-            // Esperar a que aparezca el elemento <span>
-            await page.waitForSelector(`span.buildLink[data-path="?pubdate=${dateFilterValue}"]`);
-
-            // Hacer clic en el elemento <span>
-            const dateFilter = await page.$(`span.buildLink[data-path="?pubdate=${dateFilterValue}"]`);
-            if (dateFilter) {
-                await dateFilter.click();
-            } else {
-                console.error(`No se encontró el elemento <span> con el atributo data-path="?pubdate=${dateFilterValue}"`);
-            }
-
-            // Se inicia el proceso de recopilación y procesamiento de enlaces
-            const links = await this.collectLinks(page);
-
-            // Ahora, procesamos cada enlace para obtener los detalles del trabajo
-            const jobDetails = [];
-            for (let link of links) {
-                // Espera entre solicitudes para reducir la velocidad
-                const jobDetail = await this.processJobDetails(page, link);
-
-                // Guardar en la base de datos
-                try {
-                    const newJob = new this.jobModel(jobDetail);
-                    await newJob.save();
-                    jobDetails.push(jobDetail);
-                    newJobsCounter++;
-
-                } catch (error) {
-                    // Verifica si el error es debido a un índice único duplicado
-                    if (error.code === 11000) {
-                        console.log('El trabajo ya existe en la base de datos.');
-                    } else {
-                        // Si es un error diferente, lo relanzas para que sea manejado por el sistema
-                        throw error;
-                    }
-                }
-
-                await page.waitForTimeout(1000);
-            }
-            console.log(`Proceso completado. Se agregaron ${newJobsCounter} trabajos nuevos a la base de datos.`);
-            return jobDetails;
+            console.log(`Proceso completado. Se agregaron ${newJobsCounter} trabajos nuevos.`);
+            return details;
         } finally {
             await context.close();
             await browser.close();
         }
+    }
+
+    async collectGetManfredLinks(page) {
+        const links = await page.$$eval('div.react-reveal a', (anchors) =>
+            anchors.map((anchor) => `https://www.getmanfred.com${anchor.getAttribute('href')}`)
+        );
+
+        return links;
+    }
+
+    async processGetManfredDetails(page, link) {
+        await page.goto(link);
+
+        const title = await page.$eval('h1', (element) => element.textContent.trim());
+
+        // Intentar obtener la información del company del selector original
+        let company;
+        const companySelector = 'div.kNbsot p strong';
+        const companyElement = await page.$(companySelector);
+
+        if (companyElement) {
+            // Si se encuentra el elemento, obtener el texto
+            company = await page.$eval(companySelector, (element) => element.textContent.trim());
+        } else {
+            // Si no se encuentra el elemento, obtener la información del atributo "alt" de la imagen
+            const altAttribute = await page.$eval('section.gXHpR img.BQqbU', (element) => element.getAttribute('alt'));
+            company = altAttribute ? altAttribute.trim() : null;
+        }
+
+        const location = null; // Ajusta según tus necesidades
+
+        const salaryElement = await page.$('div.dToAFB span.eLoTjr');
+        const salary = salaryElement ? (await salaryElement.textContent()).replace('hasta', '').trim() : null;
+
+        const keywordElements = await page.$$('div.jFrtk span');
+        const keywords = await Promise.all(keywordElements.map(async (element) => {
+            const text = await element.textContent();
+            return text.trim();
+        }));
+
+        const requirementElements = await page.$$('div.kreSbq ul li');
+        const requirements = await Promise.all(requirementElements.map(async (element) => {
+            const text = await element.textContent();
+            return text.trim();
+        }));
+
+        return { title, company, location, salary, keyword: keywords, requirement: requirements };
     }
 }

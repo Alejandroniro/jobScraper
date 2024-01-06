@@ -8,13 +8,13 @@ export class ScrapingController {
     @Get('/scrape-all')
     async scrapeAll() {
         try {
-            const computrabajoDetails = await this.scrapingService.scrapeComputrabajo();
+            // const computrabajoDetails = await this.scrapingService.scrapeComputrabajo();
             const getManfredDetails = await this.scrapingService.scrapeGetManfred();
 
             return {
                 success: true,
                 data: {
-                    computrabajo: computrabajoDetails,
+                    // computrabajo: computrabajoDetails,
                     getManfred: getManfredDetails,
                 },
             };
