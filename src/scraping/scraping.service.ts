@@ -18,9 +18,15 @@ export class ScrapingService {
 
     constructor(@InjectModel('Job') private readonly jobModel: Model<Job>) { }
 
+    // Funciones para el scrape de computrabajo
+
     async scrapeComputrabajo(): Promise<any> {
         const browser = await chromium.launch({
-            headless: false
+            headless: true,
+            args: [
+                '--no-sandbox',
+                `--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36`,
+            ],
         });
 
         const context = await browser.newContext();
@@ -28,49 +34,12 @@ export class ScrapingService {
         let newJobsCounter = 0; // Inicializar el contador
 
         try {
-            await page.goto('https://co.computrabajo.com/');
-
-            await page.type('#prof-cat-search-input[type=search]', this.SEARCH_KEYWORD);
-            await page.waitForTimeout(1000);
-            await page.click('#search-button');
-
-            // Esperar a que aparezca el pop-up
-            const popup = await page.waitForSelector('#pop-up-webpush-sub', { timeout: 5000 }).catch(() => null);
-
-            if (popup) {
-
-                // Hacer clic en el botón "Ahora no"
-                const closeButton = await page.$('#pop-up-webpush-sub button[onclick="webpush_subscribe_ko(event);"]');
-                if (closeButton) {
-                    await closeButton.click();
-                }
-            } else {
-                console.log('El pop-up no está presente, continúa con el código.');
-            }
-
-            const elements = await page.$$('div.filters div.field_select_links');
-
-            // Comprobar si hay al menos dos elementos
-            if (elements.length >= 2) {
-                // Hacer clic en el segundo elemento
-                await elements[1].click();
-            } else {
-                console.error('No hay suficientes elementos para hacer clic en el segundo elemento.');
-            }
-
+            const inputSearch = encodeURIComponent(this.SEARCH_KEYWORD);
             // Obtener el valor del filtro de fecha utilizando la constante
-            const dateFilterValue = this.DATE_FILTER_ATTRIBUTES.Hoy;
+            const dateFilterValue = encodeURIComponent(this.DATE_FILTER_ATTRIBUTES.Hoy);
 
-            // Esperar a que aparezca el elemento <span>
-            await page.waitForSelector(`span.buildLink[data-path="?pubdate=${dateFilterValue}"]`);
-
-            // Hacer clic en el elemento <span>
-            const dateFilter = await page.$(`span.buildLink[data-path="?pubdate=${dateFilterValue}"]`);
-            if (dateFilter) {
-                await dateFilter.click();
-            } else {
-                console.error(`No se encontró el elemento <span> con el atributo data-path="?pubdate=${dateFilterValue}"`);
-            }
+            const url = `https://co.computrabajo.com/trabajo-de-${inputSearch}?pubdate=${dateFilterValue}`;
+            await page.goto(url);
 
             // Se inicia el proceso de recopilación y procesamiento de enlaces
             const links = await this.collectLinks(page);
@@ -98,9 +67,9 @@ export class ScrapingService {
                     }
                 }
 
-                await page.waitForTimeout(1000);
+                await page.waitForTimeout(2000);
             }
-            console.log(`Proceso completado. Se agregaron ${newJobsCounter} trabajos nuevos a la base de datos.`);
+            console.log(`Proceso completado. Se agregaron ${newJobsCounter} trabajos nuevos a la base de datos desde CompuTrabajos.`);
             return jobDetails;
         } finally {
             await context.close();
@@ -109,65 +78,65 @@ export class ScrapingService {
     }
 
     async collectLinks(page) {
-        const links = [];
-        const visitedLinks = new Set();
+        const links = new Set<string>();
+        let hasNextPage = true;
 
-        // Función para procesar una página y recopilar enlaces
-        const processPage = async () => {
+        while (hasNextPage) {
+            try {
+                await this.handlePopup(page);
 
-            const currentLinks = await page.evaluate(() => {
-                const items = document.querySelectorAll('article.box_offer h2 a');
-                const links = [];
-                const visitedTitles = new Set<string>();
+                // Esperar a que la página cargue completamente antes de realizar la siguiente acción
+                await page.waitForLoadState('load');
 
-                for (let item of items) {
-                    const anchorElement = item as HTMLAnchorElement;
+                const nextButton = await page.$('div.tj_fx span.buildLink[title="Siguiente"]');
+                if (!nextButton) {
+                    hasNextPage = false;
+                } else {
+                    // Esperar a que la página cargue completamente después de hacer clic en el botón "Siguiente"
+                    const navigationPromise = page.waitForNavigation({ waitUntil: 'domcontentloaded' });
 
-                    // Modificación para quitar la parte después del #
-                    const cleanLink = anchorElement.href.split('#')[0];
+                    await Promise.all([
+                        navigationPromise,
+                        nextButton.click(),
+                    ]);
 
-                    // Obtener el texto del h2 y verificar duplicados
-                    const title = anchorElement.textContent?.trim();
-                    if (title && !visitedTitles.has(title)) {
-                        visitedTitles.add(title);
-                        links.push(cleanLink);
+                    // Verificar si la página aún está abierta antes de continuar
+                    if (page.isClosed()) {
+                        console.log('La página se cerró antes de que la navegación se completara.');
+                        break;
                     }
                 }
+                const currentLinks = await page.evaluate(() => {
+                    const items = document.querySelectorAll('article.box_offer h2 a');
+                    const visitedTitles = new Set<string>();
+                    const collectedLinks: string[] = [];
 
-                return links;
-            });
+                    for (let item of items) {
+                        const anchorElement = item as HTMLAnchorElement;
+                        const cleanLink = anchorElement.href.split('#')[0];
+                        const title = anchorElement.textContent?.trim();
 
-            // Agregar enlaces de la página actual al conjunto y a la lista general
-            for (let currentLink of currentLinks) {
-                if (!visitedLinks.has(currentLink)) {
-                    visitedLinks.add(currentLink);
-                    links.push(currentLink);
+                        if (title && !visitedTitles.has(title)) {
+                            visitedTitles.add(title);
+                            collectedLinks.push(cleanLink);
+                        }
+                    }
+
+                    return collectedLinks;
+                });
+
+                for (let currentLink of currentLinks) {
+                    links.add(currentLink);
                 }
+            } catch (error) {
+                console.error('Error en el bucle de recolección de enlaces:', error);
             }
-
-            // Intentar hacer clic en el botón "Siguiente"
-            const nextButton = await page.$('div.tj_fx span.buildLink[title="Siguiente"]');
-            if (!nextButton) {
-                return false;  // Si el botón "Siguiente" no está presente, salir
-            }
-
-            await nextButton.click();
-            await page.waitForSelector('#offersGridOfferContainer article');
-
-            return true;  // Indicar que se procesó correctamente la página
-        };
-
-        // Bucle para procesar páginas
-        while (await processPage()) {
-            // El bucle seguirá hasta que no haya más páginas
         }
-
-
-        return links;
+        return Array.from(links);
     }
 
-    async processJobDetails(page, link) {
-        await page.goto(link);
+    async processJobDetails(page, links) {
+        await page.goto(links);
 
         const title = await page.evaluate(() => {
             const titleElement = document.querySelector('h1');
@@ -208,9 +177,12 @@ export class ScrapingService {
             const keywordElement = document.querySelector('div.pb40 p.fc_aux');
             const keywordText = keywordElement?.textContent || '';
 
-            const keywords = keywordText.replace('Palabras clave:', '').trim().split(', ');
+            if (keywordText.includes('Palabras clave:')) {
+                const keywords = keywordText.replace('Palabras clave:', '').trim().split(', ');
+                return keywords;
+            }
 
-            return keywords;
+            return null;
         });
 
         const requirement = await page.evaluate(() => {
@@ -232,38 +204,62 @@ export class ScrapingService {
         return { title, company, location, salary, keyword, requirement };
     }
 
+    async handlePopup(page) {
+        const popup = await page.waitForSelector('#pop-up-webpush-sub', { timeout: 5000 }).catch(() => null);
+
+        if (popup) {
+            const closeButton = await page.$('#pop-up-webpush-sub button[onclick="webpush_subscribe_ko(event);"]');
+            if (closeButton) {
+                await closeButton.click();
+            }
+        } else {
+            console.log('El pop-up no está presente, continúa con el código.');
+        }
+    }
+
+    // Funciones para el scrape de GetManfred
+
     async scrapeGetManfred(): Promise<any> {
         const browser = await chromium.launch({
-            headless: false
+            headless: true
         });
-
 
         const context = await browser.newContext();
         const page = await context.newPage();
-
-        // Agregar el contador
         let newJobsCounter = 0;
 
         try {
             await page.goto('https://www.getmanfred.com/ofertas-empleo?onlyActive=true&currency=€');
-
-            // Esperar a que la página cargue completamente
             await page.waitForLoadState('load');
 
             const links = await this.collectGetManfredLinks(page);
+            // Ahora, procesamos cada enlace para obtener los detalles del trabajo
+            const jobDetails = [];
+            for (let link of links) {
+                // Espera entre solicitudes para reducir la velocidad
+                const jobDetail = await this.processGetManfredDetails(page, link);
 
-            // Procesar cada enlace para obtener más detalles
-            const details = [];
-            for (const link of links) {
-                const detail = await this.processGetManfredDetails(page, link);
-                details.push(detail);
+                // Guardar en la base de datos
+                try {
+                    const newJob = new this.jobModel(jobDetail);
+                    await newJob.save();
+                    jobDetails.push(jobDetail);
+                    newJobsCounter++;
 
-                // Incrementar el contador
-                newJobsCounter++;
+                } catch (error) {
+                    // Verifica si el error es debido a un índice único duplicado
+                    if (error.code === 11000) {
+                        console.log('El trabajo ya existe en la base de datos.');
+                    } else {
+                        // Si es un error diferente, lo relanzas para que sea manejado por el sistema
+                        throw error;
+                    }
+                }
+
+                await page.waitForTimeout(4000);
             }
-
-            console.log(`Proceso completado. Se agregaron ${newJobsCounter} trabajos nuevos.`);
-            return details;
+            console.log(`Proceso completado. Se agregaron ${newJobsCounter} trabajos nuevos a la base de datos desde GetManfred.`);
+            return jobDetails;
         } finally {
             await context.close();
             await browser.close();
@@ -275,11 +271,36 @@ export class ScrapingService {
             anchors.map((anchor) => `https://www.getmanfred.com${anchor.getAttribute('href')}`)
         );
 
-        return links;
+        // Filtrar enlaces para obtener solo uno por título
+        const uniqueLinks = await this.filterUniqueTitles(page, links);
+
+        return uniqueLinks;
+    }
+
+    async filterUniqueTitles(page, links) {
+        const uniqueLinks = [];
+        const visitedTitles = new Set();
+
+        for (const link of links) {
+            await page.goto(link);
+            const title = await page.$eval('h1', (element) => element.textContent.trim());
+
+            if (!visitedTitles.has(title)) {
+                visitedTitles.add(title);
+                uniqueLinks.push(link);
+            }
+        }
+
+        return uniqueLinks;
     }
 
     async processGetManfredDetails(page, link) {
-        await page.goto(link);
+        try {
+            await page.goto(link, { waitUntil: 'domcontentloaded', timeout: 60000, handleHTTPStatusCode: true });
+        } catch (error) {
+            console.error(`Error durante la navegación a ${link}: ${error.message}`);
+            return null;  // O maneja el error según tus necesidades
+        }
 
         const title = await page.$eval('h1', (element) => element.textContent.trim());
 
@@ -302,10 +323,18 @@ export class ScrapingService {
         const salaryElement = await page.$('div.dToAFB span.eLoTjr');
         const salary = salaryElement ? (await salaryElement.textContent()).replace('hasta', '').trim() : null;
 
+        function removeNonAlphanumeric(inputString: string): string {
+            // Eliminar todos los caracteres no alfanuméricos
+            return inputString.replace(/[^\w\sáéíóúüñÁÉÍÓÚÜÑ]/g, '');
+        }
+
         const keywordElements = await page.$$('div.jFrtk span');
         const keywords = await Promise.all(keywordElements.map(async (element) => {
             const text = await element.textContent();
-            return text.trim();
+            const trimmedText = text.trim();
+
+            // Utilizar la función para eliminar caracteres no alfanuméricos
+            return removeNonAlphanumeric(trimmedText);
         }));
 
         const requirementElements = await page.$$('div.kreSbq ul li');
@@ -316,4 +345,52 @@ export class ScrapingService {
 
         return { title, company, location, salary, keyword: keywords, requirement: requirements };
     }
+
+    // Peticiones a la DB
+
+    async findByTitle(): Promise<any[]> {
+        return this.jobModel.find({}, 'title').exec();
+    }
+
+    async findByCompany(): Promise<any[]> {
+        return this.jobModel.find({}, 'company').exec();
+    }
+
+    async findByLocation(): Promise<any[]> {
+        return this.jobModel.find({}, 'location').exec();
+    }
+
+    async findBySalary(): Promise<any[]> {
+        return this.jobModel.find({}, 'salary').exec();
+    }
+
+    async findByKeyword(): Promise<any[]> {
+        return this.jobModel.find({}, 'keyword').exec();
+    }
+
+    async getAllJobs(): Promise<Job[]> {
+        return this.jobModel.find().exec();
+    }
+
+    async findByRequirement(): Promise<any[]> {
+        return this.jobModel.find({}, 'requirement').exec();
+    }
+
+    async findEducation(): Promise<Job[]> {
+        return this.jobModel.find({ 'requirement.education': { $exists: true } }).exec();
+    }
+
+    async findExperience(): Promise<Job[]> {
+        return this.jobModel.find({ 'requirement.experience': { $exists: true } }).exec();
+    }
+
+    async findLanguage(): Promise<Job[]> {
+        return this.jobModel.find({ 'requirement.languages': { $exists: true } }).exec();
+    }
+
+    async findSkill(): Promise<Job[]> {
+        return this.jobModel.find({ 'requirement.skills': { $exists: true } }).exec();
+    }
+
+
 }
