@@ -37,4 +37,4 @@ lerna-debug.log*
 /playwright-report/
 /blob-report/
 /playwright/.cache/
-.vercel
+.env
