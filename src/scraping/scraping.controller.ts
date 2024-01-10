@@ -9,7 +9,13 @@ export class ScrapingController {
     async scrapeAll() {
         try {
             const computrabajoDetails = await this.scrapingService.scrapeComputrabajo();
+            // Upsert for computrabajo
+            await this.scrapingService.upsertJob(computrabajoDetails);
+
             const getManfredDetails = await this.scrapingService.scrapeGetManfred();
+            // Upsert for getManfred
+            await this.scrapingService.upsertJob(getManfredDetails);
+
 
             return {
                 success: true,
@@ -23,11 +29,24 @@ export class ScrapingController {
             return { success: false, error: 'An error occurred during scraping.' };
         }
     }
+
+    @Get('/get-all-jobs')
+    async getAllJob() {
+        try {
+            const result = await this.scrapingService.getAllJobs();
+            const filteredJobs = result.filter(job => job.title || job.company || job.requirement); // Filtra los trabajos que tienen al menos uno de estos campos no nulos
+            return { success: true, data: filteredJobs };
+        } catch (error) {
+            console.error('Error during get all jobs:', error);
+            return { success: false, error: 'An error occurred during get all jobs.' };
+        }
+    }
+
     @Get('/find-by-title')
     async findByTitle() {
         try {
             const result = await this.scrapingService.findByTitle();
-            const titles = result.map(job => job.title);
+            const titles = result.map(job => job.title).filter(Boolean);;
 
             return { success: true, data: titles };
         } catch (error) {
@@ -40,7 +59,7 @@ export class ScrapingController {
     async findByCompany() {
         try {
             const result = await this.scrapingService.findByCompany();
-            const companies = result.map(job => job.company);
+            const companies = result.map(job => job.company).filter(Boolean);;
 
             return { success: true, data: companies };
         } catch (error) {
@@ -53,7 +72,7 @@ export class ScrapingController {
     async findByLocation() {
         try {
             const result = await this.scrapingService.findByLocation();
-            const locations = result.map(job => job.location);
+            const locations = result.map(job => job.location).filter(Boolean);;
 
             return { success: true, data: locations };
         } catch (error) {
@@ -66,7 +85,7 @@ export class ScrapingController {
     async findBySalary() {
         try {
             const result = await this.scrapingService.findBySalary();
-            const salaries = result.map(job => job.salary);
+            const salaries = result.map(job => job.salary).filter(Boolean);;
 
             return { success: true, data: salaries };
         } catch (error) {
@@ -79,7 +98,7 @@ export class ScrapingController {
     async findByKeyword() {
         try {
             const result = await this.scrapingService.findByKeyword();
-            const keywords = result.map(job => job.keyword);
+            const keywords = result.map(job => job.keyword).filter(Boolean);;
 
             return { success: true, data: keywords };
         } catch (error) {
@@ -88,22 +107,11 @@ export class ScrapingController {
         }
     }
 
-    @Get('/get-all-jobs')
-    async getAllJobs() {
-        try {
-            const result = await this.scrapingService.getAllJobs();
-            return { success: true, data: result };
-        } catch (error) {
-            console.error('Error getting all jobs:', error);
-            return { success: false, error: 'An error occurred while getting all jobs.' };
-        }
-    }
-
     @Get('/find-by-requirement')
     async findByRequirement() {
         try {
             const result = await this.scrapingService.findByRequirement();
-            const requirements = result.map(job => job.requirement);
+            const requirements = result.map(job => job.requirement).filter(Boolean);;
 
             return { success: true, data: requirements };
         } catch (error) {
@@ -116,7 +124,7 @@ export class ScrapingController {
     async findEducation() {
         try {
             const result = await this.scrapingService.findEducation();
-            const educationInfo = result.map(job => job.requirement.education);
+            const educationInfo = result.map(job => job.requirement.education).filter(Boolean);;
 
             return { success: true, data: educationInfo };
         } catch (error) {
@@ -129,7 +137,7 @@ export class ScrapingController {
     async findExperience() {
         try {
             const result = await this.scrapingService.findExperience();
-            const experienceInfo = result.map(job => job.requirement.experience);
+            const experienceInfo = result.map(job => job.requirement.experience).filter(Boolean);;
 
             return { success: true, data: experienceInfo };
         } catch (error) {
@@ -142,7 +150,7 @@ export class ScrapingController {
     async findLanguage() {
         try {
             const result = await this.scrapingService.findLanguage();
-            const languageInfo = result.map(job => job.requirement.languages);
+            const languageInfo = result.map(job => job.requirement.languages).filter(Boolean);;
 
             return { success: true, data: languageInfo };
         } catch (error) {
@@ -155,7 +163,7 @@ export class ScrapingController {
     async findSkill() {
         try {
             const result = await this.scrapingService.findSkill();
-            const skillInfo = result.map(job => job.requirement.skills);
+            const skillInfo = result.map(job => job.requirement.skills).filter(Boolean);;
 
             return { success: true, data: skillInfo };
         } catch (error) {

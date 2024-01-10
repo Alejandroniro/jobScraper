@@ -191,13 +191,21 @@ export class ScrapingService {
 
             const extractedRequirements = Array.from(items).map((item) => item.textContent.trim());
 
+            const educationRegex = /Educación mínima: (.+)/;
+            const experienceRegex = /(\d+)\s*años? de experiencia/;
+            const languageRegex = /Idiomas: (.+)/;
+            const skillsRegex = /Conocimientos: (.+)/;
+
+            const educationMatch = extractedRequirements[0]?.match(educationRegex);
+            const experienceMatch = extractedRequirements[1]?.match(experienceRegex);
+            const languageMatch = extractedRequirements[2]?.match(languageRegex);
+            const skillsMatch = extractedRequirements[3]?.match(skillsRegex);
+
             return {
-                education: extractedRequirements[0]?.replace('Educación mínima:', '').trim() || null,
-                experience: extractedRequirements[1] || null,
-                languages: extractedRequirements[2]?.replace('Idiomas:', '').trim() || null,
-                skills: extractedRequirements[3]
-                    ? extractedRequirements[3].replace('Conocimientos:', '').split(', ').map((skill) => skill.trim())
-                    : null,
+                education: educationMatch ? educationMatch[1].trim() : null,
+                experience: experienceMatch ? `${experienceMatch[1]} años` : null,
+                languages: languageMatch ? languageMatch[1].trim() : null,
+                skills: skillsMatch ? skillsMatch[1].split(', ').map((skill) => skill.trim()) : null,
             };
         });
 
@@ -392,5 +400,17 @@ export class ScrapingService {
         return this.jobModel.find({ 'requirement.skills': { $exists: true } }).exec();
     }
 
+    // Funcion Upsert
+    async upsertJob(jobDetails: any): Promise<void> {
+        // Implementa la lógica para upsert en la base de datos
+        const result = await this.jobModel.updateOne({ title: jobDetails.title }, { $set: jobDetails }, { upsert: true });
 
+        if (result.upsertedCount) {
+            console.log(`Job inserted: ${jobDetails.title}`);
+        } else if (result.modifiedCount) {
+            console.log(`Job updated: ${jobDetails.title}`);
+        } else {
+            console.log(`No changes for job: ${jobDetails.title}`);
+        }
+    }
 }
