@@ -1,5 +1,6 @@
 import { Controller, Get, Post, Query } from "@nestjs/common";
 import { ScrapingService } from "./scraping.service";
+import { format } from 'date-fns';
 
 @Controller('scraping')
 export class ScrapingController {
@@ -16,7 +17,6 @@ export class ScrapingController {
             // Upsert for getManfred
             await this.scrapingService.upsertJob(getManfredDetails);
 
-
             return {
                 success: true,
                 data: {
@@ -30,12 +30,54 @@ export class ScrapingController {
         }
     }
 
+    @Get('jobs')
+    async getCountInfo(key: string, extractor: (job: any) => any) {
+        try {
+            const result = await this.scrapingService[key]();
+            const fieldInfo = result.map(extractor).filter(Boolean);
+
+            const fieldCount = {};
+            fieldInfo.forEach(field => {
+                fieldCount[field] = (fieldCount[field] || 0) + 1;
+            });
+
+            const fieldInfoWithCount = Object.keys(fieldCount).map(field => ({
+                [key]: field,
+                amount: fieldCount[field],
+            }));
+
+            return { success: true, data: fieldInfoWithCount };
+        } catch (error) {
+            console.error(`Error during find ${key}:`, error);
+            return { success: false, error: `An error occurred during find ${key}.` };
+        }
+    }
+
     @Get('/get-all-jobs')
     async getAllJob() {
         try {
             const result = await this.scrapingService.getAllJobs();
             const filteredJobs = result.filter(job => job.title || job.company || job.requirement); // Filtra los trabajos que tienen al menos uno de estos campos no nulos
-            return { success: true, data: filteredJobs };
+
+            // Obtener la fecha y hora actual en formato DD/MM/AAAA HH:mm:ss
+            const currentDateTime = format(new Date(), 'dd/MM/yyyy');
+
+            // Obtener la cantidad total de registros
+            const currentRecords = filteredJobs.length;
+
+            // Obtener la cantidad total de títulos
+            const professionals = filteredJobs.reduce((count, job) => {
+                return count + (job.title ? 1 : 0);
+            }, 0);
+            return {
+                success: true,
+                currentDateTime,
+                currentRecords,
+                professionals,
+
+                data:
+                    filteredJobs
+            };
         } catch (error) {
             console.error('Error during get all jobs:', error);
             return { success: false, error: 'An error occurred during get all jobs.' };
@@ -44,131 +86,147 @@ export class ScrapingController {
 
     @Get('/find-by-title')
     async findByTitle() {
-        try {
-            const result = await this.scrapingService.findByTitle();
-            const titles = result.map(job => job.title).filter(Boolean);;
-
-            return { success: true, data: titles };
-        } catch (error) {
-            console.error('Error during find by title:', error);
-            return { success: false, error: 'An error occurred during find by title.' };
-        }
+        return this.getCountInfo('findByTitle', job => job.title)
     }
 
     @Get('/find-by-company')
     async findByCompany() {
         try {
             const result = await this.scrapingService.findByCompany();
-            const companies = result.map(job => job.company).filter(Boolean);;
 
-            return { success: true, data: companies };
+            // Objeto para realizar el seguimiento de la cantidad de registros por compañía
+            const companyCount = {};
+
+            // Itera sobre los trabajos y cuenta la cantidad de registros por compañía
+            result.forEach(job => {
+                const company = job.company;
+
+                // Incrementa la cantidad o inicializa en 1 si es la primera vez que se encuentra esta compañía
+                companyCount[company] = (companyCount[company] || 0) + 1;
+            });
+
+            // Convierte el objeto en un array de objetos
+            const companyInfo = Object.keys(companyCount).map(company => ({
+                company: company,
+                amount: companyCount[company]
+            }));
+
+            // Obtiene el total de compañías
+            const totalCompanies = Object.keys(companyCount).length;
+
+            return {
+                success: true,
+                totalCompanies,
+                data: {
+                    companyInfo,
+                }
+            };
         } catch (error) {
             console.error('Error during find by company:', error);
             return { success: false, error: 'An error occurred during find by company.' };
         }
+
     }
 
     @Get('/find-by-location')
     async findByLocation() {
-        try {
-            const result = await this.scrapingService.findByLocation();
-            const locations = result.map(job => job.location).filter(Boolean);;
+        return this.getCountInfo('findByLocation', job => job.location)
 
-            return { success: true, data: locations };
-        } catch (error) {
-            console.error('Error during find by location:', error);
-            return { success: false, error: 'An error occurred during find by location.' };
-        }
     }
 
     @Get('/find-by-salary')
     async findBySalary() {
-        try {
-            const result = await this.scrapingService.findBySalary();
-            const salaries = result.map(job => job.salary).filter(Boolean);;
+        return this.getCountInfo('findBySalary', job => job.salary)
 
-            return { success: true, data: salaries };
-        } catch (error) {
-            console.error('Error during find by salary:', error);
-            return { success: false, error: 'An error occurred during find by salary.' };
-        }
     }
 
     @Get('/find-by-keyword')
     async findByKeyword() {
         try {
             const result = await this.scrapingService.findByKeyword();
-            const keywords = result.map(job => job.keyword).filter(Boolean);;
 
-            return { success: true, data: keywords };
+            // Objeto para realizar el seguimiento de las palabras clave y sus cantidades
+            const keywordCount = {};
+
+            // Itera sobre los trabajos y cuenta las palabras clave
+            result.forEach(job => {
+                const keywords = job.keyword || [];
+
+                // Itera sobre las palabras clave y cuenta cada una
+                keywords.forEach(keyword => {
+                    // Incrementa la cantidad o inicializa en 1 si es la primera vez que se encuentra esta palabra clave
+                    keywordCount[keyword] = (keywordCount[keyword] || 0) + 1;
+                });
+            });
+
+            // Convierte el objeto en un array de objetos
+            const keywordInfo = Object.keys(keywordCount).map(keyword => ({
+                keyword: keyword,
+                cantidad: keywordCount[keyword]
+            }));
+
+            return { success: true, data: keywordInfo };
         } catch (error) {
             console.error('Error during find by keyword:', error);
             return { success: false, error: 'An error occurred during find by keyword.' };
         }
+
     }
 
     @Get('/find-by-requirement')
     async findByRequirement() {
-        try {
-            const result = await this.scrapingService.findByRequirement();
-            const requirements = result.map(job => job.requirement).filter(Boolean);;
+        return this.getCountInfo('findByRequirement', job => job.requirement)
 
-            return { success: true, data: requirements };
-        } catch (error) {
-            console.error('Error during find by requirement:', error);
-            return { success: false, error: 'An error occurred during find by requirement.' };
-        }
     }
 
     @Get('/find-education')
     async findEducation() {
-        try {
-            const result = await this.scrapingService.findEducation();
-            const educationInfo = result.map(job => job.requirement.education).filter(Boolean);;
+        return this.getCountInfo('findEducation', job => job.education)
 
-            return { success: true, data: educationInfo };
-        } catch (error) {
-            console.error('Error during find education:', error);
-            return { success: false, error: 'An error occurred during find education.' };
-        }
     }
 
     @Get('/find-experience')
     async findExperience() {
-        try {
-            const result = await this.scrapingService.findExperience();
-            const experienceInfo = result.map(job => job.requirement.experience).filter(Boolean);;
+        return this.getCountInfo('findExperience', job => job.experience)
 
-            return { success: true, data: experienceInfo };
-        } catch (error) {
-            console.error('Error during find experience:', error);
-            return { success: false, error: 'An error occurred during find experience.' };
-        }
     }
 
     @Get('/find-language')
     async findLanguage() {
-        try {
-            const result = await this.scrapingService.findLanguage();
-            const languageInfo = result.map(job => job.requirement.languages).filter(Boolean);;
+        return this.getCountInfo('findLanguage', job => job.language)
 
-            return { success: true, data: languageInfo };
-        } catch (error) {
-            console.error('Error during find language:', error);
-            return { success: false, error: 'An error occurred during find language.' };
-        }
     }
 
     @Get('/find-skill')
     async findSkill() {
         try {
             const result = await this.scrapingService.findSkill();
-            const skillInfo = result.map(job => job.requirement.skills).filter(Boolean);;
+
+            // Objeto para realizar el seguimiento de las habilidades y sus cantidades
+            const skillCount = {};
+
+            // Itera sobre los trabajos y cuenta las habilidades
+            result.forEach(job => {
+                const skills = job.requirement.skills || [];
+
+                // Itera sobre las habilidades y cuenta cada una
+                skills.forEach(skill => {
+                    // Incrementa la cantidad o inicializa en 1 si es la primera vez que se encuentra esta habilidad
+                    skillCount[skill] = (skillCount[skill] || 0) + 1;
+                });
+            });
+
+            // Convierte el objeto en un array de objetos
+            const skillInfo = Object.keys(skillCount).map(skill => ({
+                skill: skill,
+                cantidad: skillCount[skill]
+            }));
 
             return { success: true, data: skillInfo };
         } catch (error) {
             console.error('Error during find skill:', error);
             return { success: false, error: 'An error occurred during find skill.' };
         }
+
     }
 }

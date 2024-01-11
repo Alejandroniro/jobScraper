@@ -413,4 +413,5 @@ export class ScrapingService {
             console.log(`No changes for job: ${jobDetails.title}`);
         }
     }
+
 }
