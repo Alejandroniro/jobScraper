@@ -86,7 +86,15 @@ export class ScrapingController {
 
     @Get('/find-by-title')
     async findByTitle() {
-        return this.getCountInfo('findByTitle', job => job.title)
+        try {
+            const result = await this.scrapingService.findByTitle();
+            const titles = result.map(job => job.title).filter(Boolean);
+
+            return { success: true, data: titles };
+        } catch (error) {
+            console.error('Error during find by title:', error);
+            return { success: false, error: 'An error occurred during find by title.' };
+        }
     }
 
     @Get('/find-by-company')
@@ -130,14 +138,72 @@ export class ScrapingController {
 
     @Get('/find-by-location')
     async findByLocation() {
-        return this.getCountInfo('findByLocation', job => job.location)
+        try {
+            const result = await this.scrapingService.findByLocation();
 
+            // Objeto para realizar el seguimiento de las ciudades y sus cantidades
+            const cityCount = {};
+
+            const locations = result.map(job => {
+                if (!job.location) {
+                    return null; // O manejar de alguna manera el caso en el que job.location sea null
+                }
+
+                const commaIndex = job.location.indexOf(',');
+                const city = commaIndex !== -1 ? job.location.substring(0, commaIndex).trim() : job.location.trim();
+
+                // Incrementa la cantidad o inicializa en 1 si es la primera vez que se encuentra esta ciudad
+                cityCount[city] = (cityCount[city] || 0) + 1;
+
+                return { city, amount: 1 };
+            }).filter(location => location !== null);
+
+            // Convierte el objeto en un array de objetos
+            const locationsWithCount = Object.keys(cityCount).map(city => ({
+                city,
+                amount: cityCount[city]
+            }));
+
+            return { success: true, data: locationsWithCount };
+        } catch (error) {
+            console.error('Error during find by location:', error);
+            return { success: false, error: 'An error occurred during find by location.' };
+        }
     }
 
     @Get('/find-by-salary')
     async findBySalary() {
-        return this.getCountInfo('findBySalary', job => job.salary)
+        try {
+            const result = await this.scrapingService.findBySalary();
 
+            // Objeto para realizar el seguimiento de los salarios y sus cantidades
+            const salaryCount: Record<string, number> = {};
+
+            // Itera sobre los trabajos y cuenta los salarios
+            result.forEach(job => {
+                const salary = job.salary;
+
+                // Verifica si el salario no es nulo antes de realizar operaciones
+                if (salary !== null && salary !== undefined) {
+                    // Elimina "(mensual)" y cualquier otro texto no deseado
+                    const cleanedSalary = salary.replace(/\(mensual\)/i, '').trim();
+
+                    // Incrementa la cantidad o inicializa en 1 si es la primera vez que se encuentra este salario
+                    salaryCount[cleanedSalary] = (salaryCount[cleanedSalary] || 0) + 1;
+                }
+            });
+
+            // Convierte el objeto en un array de objetos
+            const salaryInfo = Object.keys(salaryCount).map(salary => ({
+                salary: salary,
+                cantidad: salaryCount[salary]
+            }));
+
+            return { success: true, data: salaryInfo };
+        } catch (error) {
+            console.error('Error during find by salary:', error);
+            return { success: false, error: 'An error occurred during find by salary.' };
+        }
     }
 
     @Get('/find-by-keyword')
@@ -175,26 +241,141 @@ export class ScrapingController {
 
     @Get('/find-by-requirement')
     async findByRequirement() {
-        return this.getCountInfo('findByRequirement', job => job.requirement)
+        try {
+            const result = await this.scrapingService.findByRequirement();
 
+            // Devuelve el objeto completo
+            return { success: true, data: result };
+        } catch (error) {
+            console.error('Error during find by requirement:', error);
+            return { success: false, error: 'An error occurred during find by requirement.' };
+        }
     }
 
     @Get('/find-education')
     async findEducation() {
-        return this.getCountInfo('findEducation', job => job.education)
+        try {
+            const result = await this.scrapingService.findEducation();
 
+            // Objeto para realizar el seguimiento de las educaciones y sus cantidades
+            const educationCount = {};
+
+            const educations = result.map(job => {
+                if (!job.requirement || !job.requirement.education) {
+                    return null; // O manejar de alguna manera el caso en el que education sea null
+                }
+
+                const education = job.requirement.education;
+
+                // Incrementa la cantidad o inicializa en 1 si es la primera vez que se encuentra esta educación
+                educationCount[education] = (educationCount[education] || 0) + 1;
+
+                return { education, amount: 1 };
+            }).filter(education => education !== null);
+
+            // Convierte el objeto en un array de objetos
+            const educationsWithCount = Object.keys(educationCount).map(education => ({
+                education,
+                amount: educationCount[education]
+            }));
+
+            return { success: true, data: educationsWithCount };
+        } catch (error) {
+            console.error('Error during find education:', error);
+            return { success: false, error: 'An error occurred during find education.' };
+        }
     }
 
     @Get('/find-experience')
     async findExperience() {
-        return this.getCountInfo('findExperience', job => job.experience)
+        try {
+            const result = await this.scrapingService.findExperience();
 
+            // Objeto para realizar el seguimiento de las experiencias y sus cantidades
+            const experienceCount = { junior: 0, semisenior: 0, senior: 0 };
+
+            // Itera sobre los trabajos y cuenta las experiencias
+            result.forEach(job => {
+                const requirements = job.requirement || {};
+                const experience = requirements.experience;
+
+                // Función auxiliar para asignar la categoría de experiencia
+                const assignExperienceCategory = () => {
+                    if (!experience || experience.toLowerCase() === 'sin experiencia') {
+                        return 'junior'; // Si no hay experiencia o es "sin experiencia", asume junior
+                    } else {
+                        const yearsOfExperience = parseInt(experience);
+
+                        if (yearsOfExperience >= 1 && yearsOfExperience <= 2) {
+                            return 'junior';
+                        } else if (yearsOfExperience >= 3 && yearsOfExperience <= 4) {
+                            return 'semisenior';
+                        } else {
+                            return 'senior';
+                        }
+                    }
+                };
+
+                // Asigna la categoría y actualiza la cantidad
+                const category = assignExperienceCategory();
+                experienceCount[category] = (experienceCount[category] || 0) + 1; // Actualiza la cantidad a 1 en lugar de job.amount
+            });
+
+            // Convierte el objeto en un array de objetos
+            const experienceInfo = Object.keys(experienceCount).map(experience => ({
+                role: experience,
+                cantidad: experienceCount[experience]
+            }));
+
+            return { success: true, data: experienceInfo };
+        } catch (error) {
+            console.error('Error during find experience:', error);
+            return { success: false, error: 'An error occurred during find experience.' };
+        }
     }
 
     @Get('/find-language')
     async findLanguage() {
-        return this.getCountInfo('findLanguage', job => job.language)
+        try {
+            const result = await this.scrapingService.findLanguage();
 
+            // Objeto para realizar el seguimiento de los idiomas y sus cantidades
+            const languageCount = {};
+
+            const languages = result.map(job => {
+                if (!job.requirement || !job.requirement.languages) {
+                    return null; // O manejar de alguna manera el caso en el que language sea null o undefined
+                }
+
+                let jobLanguages;
+
+                if (Array.isArray(job.requirement.languages)) {
+                    // Si es un array, simplemente úsalo
+                    jobLanguages = job.requirement.languages;
+                } else {
+                    // Si es una cadena, conviértela en un array con un solo elemento
+                    jobLanguages = [job.requirement.languages];
+                }
+
+                // Itera sobre los idiomas y los agrega al contador
+                jobLanguages.forEach(language => {
+                    languageCount[language] = (languageCount[language] || 0) + 1;
+                });
+
+                return { languages: jobLanguages, amount: jobLanguages.length };
+            }).filter(language => language !== null);
+
+            // Convierte el objeto en un array de objetos
+            const languagesWithCount = Object.keys(languageCount).map(language => ({
+                language,
+                amount: languageCount[language]
+            }));
+
+            return { success: true, data: languagesWithCount };
+        } catch (error) {
+            console.error('Error during find language:', error);
+            return { success: false, error: 'An error occurred during find language.' };
+        }
     }
 
     @Get('/find-skill')
@@ -229,4 +410,5 @@ export class ScrapingController {
         }
 
     }
+
 }
