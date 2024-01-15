@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Query } from "@nestjs/common";
 import { ScrapingService } from "./scraping.service";
 import { format } from 'date-fns';
+import { Cron, CronExpression } from '@nestjs/schedule';
 
 @Controller('scraping')
 export class ScrapingController {
@@ -27,29 +28,6 @@ export class ScrapingController {
         } catch (error) {
             console.error('Error during scraping:', error);
             return { success: false, error: 'An error occurred during scraping.' };
-        }
-    }
-
-    @Get('jobs')
-    async getCountInfo(key: string, extractor: (job: any) => any) {
-        try {
-            const result = await this.scrapingService[key]();
-            const fieldInfo = result.map(extractor).filter(Boolean);
-
-            const fieldCount = {};
-            fieldInfo.forEach(field => {
-                fieldCount[field] = (fieldCount[field] || 0) + 1;
-            });
-
-            const fieldInfoWithCount = Object.keys(fieldCount).map(field => ({
-                [key]: field,
-                amount: fieldCount[field],
-            }));
-
-            return { success: true, data: fieldInfoWithCount };
-        } catch (error) {
-            console.error(`Error during find ${key}:`, error);
-            return { success: false, error: `An error occurred during find ${key}.` };
         }
     }
 
@@ -409,6 +387,18 @@ export class ScrapingController {
             return { success: false, error: 'An error occurred during find skill.' };
         }
 
+    }
+
+    // Este endpoint inicia la tarea programada manualmente si es necesario
+    @Post('/start-scheduled-task')
+    startScheduledTask() {
+        this.scrapeAll(); // Ejecuta la tarea inmediatamente al invocar este endpoint
+    }
+
+    // Este decorador configura la tarea programada para ejecutarse cada 24 horas
+    @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
+    handleCron() {
+        this.scrapeAll(); // Ejecuta la tarea programada cada 24 horas
     }
 
 }

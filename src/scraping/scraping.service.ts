@@ -237,7 +237,7 @@ export class ScrapingService {
         let newJobsCounter = 0;
 
         try {
-            await page.goto('https://www.getmanfred.com/ofertas-empleo?onlyActive=true&currency=€');
+            await page.goto('https://www.getmanfred.com/ofertas-empleo?onlyActive=true');
             await page.waitForLoadState('load');
 
             const links = await this.collectGetManfredLinks(page);
