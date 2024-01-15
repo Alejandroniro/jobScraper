@@ -10,9 +10,9 @@ export class ScrapingController {
     @Post('/scrape-all')
     async scrapeAll() {
         try {
-            const computrabajoDetails = await this.scrapingService.scrapeComputrabajo();
+            //const computrabajoDetails = await this.scrapingService.scrapeComputrabajo();
             // Upsert for computrabajo
-            await this.scrapingService.upsertJob(computrabajoDetails);
+           // await this.scrapingService.upsertJob(computrabajoDetails);
 
             const getManfredDetails = await this.scrapingService.scrapeGetManfred();
             // Upsert for getManfred
@@ -21,7 +21,7 @@ export class ScrapingController {
             return {
                 success: true,
                 data: {
-                    computrabajo: computrabajoDetails,
+                    //computrabajo: computrabajoDetails,
                     getManfred: getManfredDetails,
                 },
             };

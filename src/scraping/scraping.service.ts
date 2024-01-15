@@ -243,6 +243,11 @@ export class ScrapingService {
         try {
             await page.goto("https://www.getmanfred.com/ofertas-empleo?onlyActive=true", { waitUntil: "load" });
 
+            // Agrega un console.log para imprimir el contenido de la página
+            const pageContent = await page.content();
+            console.log("Contenido de la página:", pageContent);
+
+
             const links = await this.collectGetManfredLinks(page);
             // Ahora, procesamos cada enlace para obtener los detalles del trabajo
             const jobDetails = [];
