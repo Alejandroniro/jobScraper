@@ -39,7 +39,7 @@ export class ScrapingService {
             const dateFilterValue = encodeURIComponent(this.DATE_FILTER_ATTRIBUTES.Hoy);
 
             const url = `https://co.computrabajo.com/trabajo-de-${inputSearch}?pubdate=${dateFilterValue}`;
-            await page.goto(url);
+            await page.goto(url, { timeout: 60000 });
 
             // Se inicia el proceso de recopilación y procesamiento de enlaces
             const links = await this.collectLinks(page);
