@@ -2,11 +2,16 @@ import { Controller, Get, Post, Query } from "@nestjs/common";
 import { ScrapingService } from "./scraping.service";
 import { format } from 'date-fns';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { ApiResponse, ApiTags } from '@nestjs/swagger';
 
+@ApiTags('scraping') // Etiqueta para agrupar endpoints en Swagger
 @Controller('scraping')
 export class ScrapingController {
     constructor(private readonly scrapingService: ScrapingService) { }
 
+    @ApiResponse({ status: 200, description: 'Operación exitosa' })
+    @ApiResponse({ status: 400, description: 'Solicitud incorrecta' })
+    @ApiResponse({ status: 500, description: 'Error interno del servidor' })
     @Post('/scrape-all')
     async scrapeAll() {
         try {
@@ -30,7 +35,8 @@ export class ScrapingController {
             return { success: false, error: 'An error occurred during scraping.' };
         }
     }
-
+    @ApiResponse({ status: 200, description: 'Operación exitosa', type: Object })
+    @ApiResponse({ status: 500, description: 'Error interno del servidor' })
     @Get('/get-all-jobs')
     async getAllJob() {
         try {
@@ -61,6 +67,8 @@ export class ScrapingController {
             return { success: false, error: 'An error occurred during get all jobs.' };
         }
     }
+    @ApiResponse({ status: 200, description: 'Operación exitosa', type: Object })
+    @ApiResponse({ status: 500, description: 'Error interno del servidor' })
 
     @Get('/find-by-title')
     async findByTitle() {
@@ -74,6 +82,8 @@ export class ScrapingController {
             return { success: false, error: 'An error occurred during find by title.' };
         }
     }
+    @ApiResponse({ status: 200, description: 'Operación exitosa', type: Object })
+    @ApiResponse({ status: 500, description: 'Error interno del servidor' })
 
     @Get('/find-by-company')
     async findByCompany() {
@@ -113,6 +123,8 @@ export class ScrapingController {
         }
 
     }
+    @ApiResponse({ status: 200, description: 'Operación exitosa', type: Object })
+    @ApiResponse({ status: 500, description: 'Error interno del servidor' })
 
     @Get('/find-by-location')
     async findByLocation() {
@@ -148,6 +160,8 @@ export class ScrapingController {
             return { success: false, error: 'An error occurred during find by location.' };
         }
     }
+    @ApiResponse({ status: 200, description: 'Operación exitosa', type: Object })
+    @ApiResponse({ status: 500, description: 'Error interno del servidor' })
 
     @Get('/find-by-salary')
     async findBySalary() {
@@ -183,6 +197,8 @@ export class ScrapingController {
             return { success: false, error: 'An error occurred during find by salary.' };
         }
     }
+    @ApiResponse({ status: 200, description: 'Operación exitosa', type: Object })
+    @ApiResponse({ status: 500, description: 'Error interno del servidor' })
 
     @Get('/find-by-keyword')
     async findByKeyword() {
@@ -216,6 +232,8 @@ export class ScrapingController {
         }
 
     }
+    @ApiResponse({ status: 200, description: 'Operación exitosa', type: Object })
+    @ApiResponse({ status: 500, description: 'Error interno del servidor' })
 
     @Get('/find-by-requirement')
     async findByRequirement() {
@@ -229,6 +247,8 @@ export class ScrapingController {
             return { success: false, error: 'An error occurred during find by requirement.' };
         }
     }
+    @ApiResponse({ status: 200, description: 'Operación exitosa', type: Object })
+    @ApiResponse({ status: 500, description: 'Error interno del servidor' })
 
     @Get('/find-education')
     async findEducation() {
@@ -263,6 +283,8 @@ export class ScrapingController {
             return { success: false, error: 'An error occurred during find education.' };
         }
     }
+    @ApiResponse({ status: 200, description: 'Operación exitosa', type: Object })
+    @ApiResponse({ status: 500, description: 'Error interno del servidor' })
 
     @Get('/find-experience')
     async findExperience() {
@@ -311,6 +333,8 @@ export class ScrapingController {
             return { success: false, error: 'An error occurred during find experience.' };
         }
     }
+    @ApiResponse({ status: 200, description: 'Operación exitosa', type: Object })
+    @ApiResponse({ status: 500, description: 'Error interno del servidor' })
 
     @Get('/find-language')
     async findLanguage() {
@@ -355,6 +379,8 @@ export class ScrapingController {
             return { success: false, error: 'An error occurred during find language.' };
         }
     }
+    @ApiResponse({ status: 200, description: 'Operación exitosa', type: Object })
+    @ApiResponse({ status: 500, description: 'Error interno del servidor' })
 
     @Get('/find-skill')
     async findSkill() {
@@ -388,14 +414,16 @@ export class ScrapingController {
         }
 
     }
+    @ApiResponse({ status: 200, description: 'Operación exitosa', type: Object })
+    @ApiResponse({ status: 500, description: 'Error interno del servidor' })
 
-    // Este endpoint inicia la tarea programada manualmente si es necesario
     @Post('/start-scheduled-task')
     startScheduledTask() {
         this.scrapeAll(); // Ejecuta la tarea inmediatamente al invocar este endpoint
     }
+    @ApiResponse({ status: 200, description: 'Operación exitosa', type: Object })
+    @ApiResponse({ status: 500, description: 'Error interno del servidor' })
 
-    // Este decorador configura la tarea programada para ejecutarse cada 24 horas
     @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
     handleCron() {
         this.scrapeAll(); // Ejecuta la tarea programada cada 24 horas

@@ -1,8 +1,8 @@
 import { Injectable } from "@nestjs/common";
-import { chromium } from "playwright";
+import { chromium, Browser, Page } from "playwright";
 import { InjectModel } from "@nestjs/mongoose";
 import { Model } from "mongoose";
-import { Job, JobModel } from './job.model';
+import { Job } from './job.model';
 
 @Injectable()
 export class ScrapingService {
@@ -77,30 +77,24 @@ export class ScrapingService {
         }
     }
 
-    async collectLinks(page) {
+    async collectLinks(page): Promise<string[]> {
         const links = new Set<string>();
         let hasNextPage = true;
 
         while (hasNextPage) {
             try {
                 await this.handlePopup(page);
-
-                // Esperar a que la página cargue completamente antes de realizar la siguiente acción
                 await page.waitForLoadState('load');
 
                 const nextButton = await page.$('div.tj_fx span.buildLink[title="Siguiente"]');
                 if (!nextButton) {
                     hasNextPage = false;
                 } else {
-                    // Esperar a que la página cargue completamente después de hacer clic en el botón "Siguiente"
                     const navigationPromise = page.waitForNavigation({ waitUntil: 'domcontentloaded' });
-
                     await Promise.all([
                         navigationPromise,
                         nextButton.click(),
                     ]);
-
-                    // Verificar si la página aún está abierta antes de continuar
                     if (page.isClosed()) {
                         console.log('La página se cerró antes de que la navegación se completara.');
                         break;
@@ -121,7 +115,6 @@ export class ScrapingService {
                             collectedLinks.push(cleanLink);
                         }
                     }
-
                     return collectedLinks;
                 });
 
