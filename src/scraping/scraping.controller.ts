@@ -426,6 +426,7 @@ export class ScrapingController {
 
     @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
     handleCron() {
+        console.log('Executing scheduled task...');
         this.scrapeAll(); // Ejecuta la tarea programada cada 24 horas
     }
 
